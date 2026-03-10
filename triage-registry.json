@@ -1,0 +1,18 @@
+{
+  "ghacks": {
+    "name": "gHacks Team",
+    "formId": "1FAIpQLScuoBOQVzzxsihbFy5wc-K_DkSqTquoWKyrD--DpwDvOCHSTQ",
+    "entries": {
+      "summary": "ENTRY_ID_FOR_SUMMARY",
+      "feedback": "ENTRY_ID_FOR_FEEDBACK"
+    }
+  },
+  "googlegeist": {
+    "name": "Googlegeist Team",
+    "formId": "YOUR_GOOGLEGEIST_FORM_ID",
+    "entries": {
+      "summary": "SUMMARY_ENTRY_ID",
+      "feedback": "FEEDBACK_ENTRY_ID"
+    }
+  }
+}

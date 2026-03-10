@@ -1,0 +1,39 @@
+{
+  "categories": [
+    {
+      "name": "Bug Report",
+      "description": "Issues with software, tools, or applications.",
+      "destination": "Buganizer"
+    },
+    {
+      "name": "Feature Request",
+      "description": "Suggestions for new features or improvements to existing tools.",
+      "destination": "Buganizer or product-specific ideas list"
+    },
+    {
+      "name": "Office/Facilities Issue",
+      "description": "Problems with the physical office space, amenities, or building.",
+      "destination": "GUTS/REWS"
+    },
+    {
+      "name": "Food Feedback",
+      "description": "Comments or suggestions about cafes, food, or micro kitchens.",
+      "destination": "Go/Foodback"
+    },
+    {
+      "name": "Manager/Team/Work Feedback",
+      "description": "Comments about team dynamics, leadership, or work processes (may be covered by items in Googlegeist survey).",
+      "destination": "Always-on Googlegeist Portal"
+    },
+    {
+      "name": "Critical/Compliance",
+      "description": "Emergencies, ethics, discrimination, bribery, or severe safety issues.",
+      "destination": "go/ethics or go/notify"
+    },
+    {
+      "name": "Other",
+      "description": "Anything that doesn't fit above.",
+      "destination": "Suggest a likely destination"
+    }
+  ]
+}

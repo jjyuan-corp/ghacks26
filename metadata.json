@@ -1,0 +1,5 @@
+{
+  "name": "Listen, Google v2",
+  "description": "An AI-powered feedback routing system for Googlers, using multi-agent architecture to analyze and direct natural language input.",
+  "requestFramePermissions": []
+}
