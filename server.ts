@@ -28,12 +28,13 @@ async function getTriageLink(teamKey: string) {
       };
     }
 
-    const { formId, name } = teamConfig;
+    const { formId, name, parentSystem } = teamConfig;
     const formUrl = `https://docs.google.com/forms/d/e/${formId}/viewform`;
 
     return { 
       success: true, 
       team: name,
+      parentSystem: parentSystem,
       formUrl: formUrl,
       method: 'direct'
     };
@@ -56,7 +57,7 @@ app.post('/api/triage', async (req, res) => {
   }
 
   let targetTeam = team;
-  if (!targetTeam && analysis.category === 'Manager/Team/Work Feedback') {
+  if (!targetTeam && (analysis.category === 'Googlegeist' || analysis.category === 'People and Culture Feedback')) {
     targetTeam = 'googlegeist';
   }
 

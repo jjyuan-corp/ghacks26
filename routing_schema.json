@@ -21,14 +21,19 @@
       "destination": "Go/Foodback"
     },
     {
-      "name": "Manager/Team/Work Feedback",
+      "name": "People and Culture Feedback",
       "description": "Comments about team dynamics, leadership, or work processes (may be covered by items in Googlegeist survey).",
       "destination": "Always-on Googlegeist Portal"
     },
     {
-      "name": "Critical/Compliance",
-      "description": "Emergencies, ethics, discrimination, bribery, or severe safety issues.",
-      "destination": "go/ethics or go/notify"
+      "name": "Emergency",
+      "description": "Severe safety issues or immediate emergencies.",
+      "destination": "go/notify"
+    },
+    {
+      "name": "Compliance/Ethics",
+      "description": "Ethics, discrimination, bribery, or compliance issues.",
+      "destination": "go/ethics"
     },
     {
       "name": "Other",

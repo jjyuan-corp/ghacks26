@@ -1,6 +1,7 @@
 {
   "ghacks": {
     "name": "gHacks Team",
+    "parentSystem": "Buganizer",
     "formId": "1FAIpQLScuoBOQVzzxsihbFy5wc-K_DkSqTquoWKyrD--DpwDvOCHSTQ",
     "entries": {
       "summary": "ENTRY_ID_FOR_SUMMARY",
@@ -9,7 +10,44 @@
   },
   "googlegeist": {
     "name": "Googlegeist Team",
+    "parentSystem": "Googlegeist",
     "formId": "YOUR_GOOGLEGEIST_FORM_ID",
+    "entries": {
+      "summary": "SUMMARY_ENTRY_ID",
+      "feedback": "FEEDBACK_ENTRY_ID"
+    }
+  },
+  "rews": {
+    "name": "REWS Helpdesk",
+    "parentSystem": "GUTS",
+    "formId": "REWS_FORM_ID",
+    "entries": {
+      "summary": "SUMMARY_ENTRY_ID",
+      "feedback": "FEEDBACK_ENTRY_ID"
+    }
+  },
+  "foodback": {
+    "name": "Foodback Team",
+    "parentSystem": "Foodback",
+    "formId": "FOODBACK_FORM_ID",
+    "entries": {
+      "summary": "SUMMARY_ENTRY_ID",
+      "feedback": "FEEDBACK_ENTRY_ID"
+    }
+  },
+  "techstop": {
+    "name": "Tech Support",
+    "parentSystem": "GUTS",
+    "formId": "TECHSTOP_FORM_ID",
+    "entries": {
+      "summary": "SUMMARY_ENTRY_ID",
+      "feedback": "FEEDBACK_ENTRY_ID"
+    }
+  },
+  "go/techstop": {
+    "name": "Tech Support",
+    "parentSystem": "GUTS",
+    "formId": "TECHSTOP_FORM_ID",
     "entries": {
       "summary": "SUMMARY_ENTRY_ID",
       "feedback": "FEEDBACK_ENTRY_ID"

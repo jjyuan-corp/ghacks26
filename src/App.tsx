@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -78,11 +78,16 @@ const SYSTEM_INSTRUCTION = `You are an intelligent assistant for Googlers, desig
 The main categories are:
 - Bug Report: Issues with software, tools, or applications. Likely destination: Buganizer.
 - Feature Request: Suggestions for new features or improvements to existing tools. Likely destination: Buganizer or product-specific ideas list.
-- Office/Facilities Issue: Problems with the physical office space, amenities, or building. Likely destination: GUTS.
-- Food Feedback: Comments or suggestions about cafes, food, or micro kitchens. Likely destination: Go/Foodback.
-- Dogfood Feedback: Feedback on internal pre-release products or features. Likely destination: The specific dogfood's feedback form or Buganizer component.
-- Manager/Team/Work Feedback: Comments about team dynamics, leadership, culture, or work processes. This includes all HR and people-related feedback. Likely destination: Go/googlegeist-always-on.
-- Other: Anything that doesn't fit above. Feel free to categorize them yourself and suggest likely destination.
+- Facilities: Problems with the physical office space, amenities, or building. Likely destination: GUTS.
+- Technical Support: Issues with hardware like printers, monitors, or office peripherals. Likely destination: GUTS (Tech Support).
+- Food: Comments or suggestions about cafes, food, or micro kitchens. Likely destination: Go/Foodback.
+- Dogfood: Feedback on internal pre-release products or features. Likely destination: The specific dogfood's feedback form or Buganizer component.
+- Googlegeist: Comments about team dynamics, leadership, culture, or work processes. This includes all HR and people-related feedback. Likely destination: Always-on Googlegeist Portal.
+- Emergency: Severe safety issues or immediate emergencies. Likely destination: go/notify. NOTE: These require immediate intervention and MUST be handled off-platform.
+- Compliance: Ethics, discrimination, bribery, or compliance issues. Likely destination: go/ethics. NOTE: These are high-sensitivity and MUST be handled off-platform for safety and privacy.
+- Other: Anything that doesn't fit above. Feel free to categorize them yourself and suggest a likely destination.
+
+NOTE on "Fixit": In this context, a "Fixit" is an engineering event to reduce technical debt or fix bugs in software. It is NOT for facilities repairs or hardware issues. For hardware issues like broken printers, use "Technical Support".
 
 You MUST also determine if the feedback is SUFFICIENT for the responsible team to intervene. 
 - ANCHORING POINT: Only ask follow-up questions if they are ABSOLUTELY NECESSARY for a technician or developer to take action. If the feedback is clear enough to start an investigation, set 'is_sufficient' to true.
@@ -93,12 +98,13 @@ You MUST also determine if the feedback is SUFFICIENT for the responsible team t
 - If it's leadership or HR feedback, it MUST go to Go/googlegeist-always-on.
 - Do NOT ask for "impact on team", "team name", or "how it makes you feel" as that is unnecessary.
 - ONLY ask for missing technical/locational details that are the difference between "we can fix this" and "we don't know where to look".
-- For "Manager/Team/Work Feedback" (Googlegeist), ALWAYS set 'is_sufficient' to true and do NOT provide follow-up questions. This category never requires follow-up.
+- For "Googlegeist" (Googlegeist), ALWAYS set 'is_sufficient' to true and do NOT provide follow-up questions. This category never requires follow-up.
 
 Output your analysis in JSON format with the following fields:
 - 'category': The most fitting category from the list above.
 - 'justification': A brief, clean explanation of why this category was chosen. DO NOT include internal notes like "Judgment correction" or "Dynamic Discovery" in this field.
 - 'likely_destination': The system/place this feedback should ideally go.
+- 'team': If the destination is a specific team or sub-component, provide its name here (e.g. "REWS", "gHacks", "Tech Support").
 - 'summary': A concise summary of the feedback.
 - 'is_sufficient': boolean, true if there is enough detail for action, false otherwise.
 - 'follow_up_questions': array of strings, questions to ask the user if 'is_sufficient' is false. Limit to 1 highly specific question.`;
@@ -129,6 +135,19 @@ export default function App() {
   const [history, setHistory] = useState<FeedbackStatus[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [triageThinking, setTriageThinking] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-expand textarea logic
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      // text-xl is 20px, leading-relaxed is 1.625. 20 * 1.625 = 32.5px per line.
+      // 10 lines is roughly 325px.
+      const maxHeight = 325;
+      textareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+  }, [feedback]);
 
   useEffect(() => {
     const randomExample = FEEDBACK_EXAMPLES[Math.floor(Math.random() * FEEDBACK_EXAMPLES.length)];
@@ -147,15 +166,28 @@ export default function App() {
 
   // Agent 1: Emergency/Compliance Guardrail
   const emergencyGuardrail = (text: string) => {
-    const criticalKeywords = ['fire', 'bribery', 'discrimination', 'ethics', 'harassment', 'safety', 'emergency'];
+    const emergencyKeywords = ['fire', 'safety', 'emergency', 'medical', 'injury'];
+    const complianceKeywords = ['bribery', 'discrimination', 'ethics', 'harassment', 'fraud', 'compliance'];
     const lowerText = text.toLowerCase();
-    if (criticalKeywords.some(keyword => lowerText.includes(keyword))) {
+    
+    if (emergencyKeywords.some(keyword => lowerText.includes(keyword))) {
       return {
         flagged: true,
-        destination: 'go/ethics or go/notify',
-        message: 'Critical issue detected. Please route to go/ethics or go/notify immediately.'
+        category: 'Emergency',
+        destination: 'go/notify',
+        message: 'Emergency detected. Please route to go/notify immediately.'
       };
     }
+    
+    if (complianceKeywords.some(keyword => lowerText.includes(keyword))) {
+      return {
+        flagged: true,
+        category: 'Compliance/Ethics',
+        destination: 'go/ethics',
+        message: 'Compliance or ethics issue detected. Please route to go/ethics immediately.'
+      };
+    }
+    
     return { flagged: false };
   };
 
@@ -196,7 +228,7 @@ export default function App() {
 
   // Agent 4: Deduplication Mock
   const deduplicate = (text: string, category: string) => {
-    if (category === 'Manager/Team/Work Feedback') return null;
+    if (category === 'Googlegeist') return null;
     
     // For demo purposes: 50% chance of triggering a duplicate warning for non-manager feedback
     if (Math.random() < 0.5) {
@@ -245,12 +277,19 @@ export default function App() {
   };
 
   const handleAnalyze = useCallback(async (force = false, additionalText = '') => {
-    const fullText = additionalText ? `${feedback}\n\nAdditional Details: ${additionalText}` : feedback;
-    if (!fullText.trim() || fullText.trim() === 'Listen, Google,') return;
-
+    let fullText = feedback;
+    
     if (additionalText) {
+      // If we have a follow-up question, include it for context
+      if (analysis?.follow_up_questions?.[0]) {
+        fullText = `${feedback}\n\nQuestion: ${analysis.follow_up_questions[0]}\nAnswer: ${additionalText}`;
+      } else {
+        fullText = `${feedback}\n\nAdditional Details: ${additionalText}`;
+      }
       setFeedback(fullText);
     }
+
+    if (!fullText.trim() || fullText.trim() === 'Listen, Google,') return;
 
     setIsAnalyzing(true);
     setIsSubmitting(false);
@@ -267,10 +306,10 @@ export default function App() {
     const guardrail = emergencyGuardrail(fullText);
     if (guardrail.flagged) {
       const data: FeedbackAnalysis = {
-        category: 'Critical/Compliance',
+        category: guardrail.category || 'Emergency',
         justification: guardrail.message,
         likely_destination: guardrail.destination,
-        summary: 'Emergency/Compliance issue detected.',
+        summary: `${guardrail.category} issue detected.`,
         is_sufficient: true,
         critical: true
       };
@@ -301,21 +340,22 @@ export default function App() {
       data.fullText = fullText; // Store the context used for this analysis
 
       // Agent 2.5: Team Identification & Duplicate Search (Moma Search Simulation)
-      if (data.category !== 'Manager/Team/Work Feedback') {
+      if (data.category !== 'Googlegeist') {
         setTriageThinking("Searching Moma for duplicate reports and responsible teams...");
         const teamResponse = await ai.models.generateContent({
           model: "gemini-3.1-pro-preview",
           contents: `Based on this feedback: "${fullText}", which specific Google team, project, or dogfood is most likely responsible for addressing this? 
           
-          Also, check if similar issues have been reported recently.
+          CONTEXT: The feedback has been categorized as: ${data.category}.
           
-          If the feedback mentions a specific team (e.g. gHacks, Googlegeist, REWS) or a specific dogfood (e.g. "Gemini Dogfood", "Workspace Dogfood"), identify them.
-          Search for the team's feedback form, Buganizer component, or dogfood intake path if possible.
+          CRITICAL RULES:
+          1. If the issue is about hardware (printers, monitors, peripherals), the destination is GUTS (Tech Support). DO NOT use go/fixit.
+          2. go/fixit is ONLY for engineering events to fix software bugs/technical debt.
           
           Return a JSON object with:
-          'team': string (lowercase key, e.g. 'ghacks' or 'gemini_dogfood')
-          'teamName': string (display name, e.g. 'gHacks Team' or 'Gemini Dogfood Program')
-          'destination': string (e.g. 'gHacks Feedback Form' or 'go/gemini-dogfood-feedback')
+          'team': string (lowercase key, e.g. 'ghacks' or 'foodback')
+          'teamName': string (display name, e.g. 'gHacks Team' or 'Foodback Team')
+          'destination': string (SINGLE primary destination, e.g. 'Go/Foodback')
           'reasoning': string`,
           config: { 
             responseMimeType: 'application/json',
@@ -325,7 +365,11 @@ export default function App() {
         const teamData = JSON.parse(teamResponse.text || '{}');
         if (teamData.team) {
           data.team = teamData.team;
-          data.likely_destination = teamData.destination || (teamData.teamName + " Feedback Form");
+          // We keep the likely_destination from the primary classification agent
+          // unless it was very generic (like just "GUTS" or "Buganizer") and we found something better.
+          if (!data.likely_destination || data.likely_destination === 'GUTS' || data.likely_destination === 'Buganizer') {
+            data.likely_destination = teamData.destination || (teamData.teamName + " Feedback Form");
+          }
         }
         setTriageThinking(null);
       }
@@ -333,17 +377,26 @@ export default function App() {
       // Agent 3: Judging (Verification)
       const judgingResponse = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Evaluate the following classification for accuracy based on the routing guidelines.
-Feedback: "${fullText}"
-Classification: ${JSON.stringify(data)}
-
-If the category is incorrect, provide the correct one.
-Return a JSON object with:
-'approved': boolean
-'correction': string (explanation of the correction)
-'newCategory': string (the corrected category name if not approved)
-'newDestination': string (the corrected destination if not approved)
-'newJustification': string (a clean, final justification if not approved)`,
+        contents: `Evaluate the following classification for accuracy based on the provided routing guidelines.
+        
+        GUIDELINES:
+        ${SYSTEM_INSTRUCTION}
+        
+        Feedback: "${fullText}"
+        Classification: ${JSON.stringify(data)}
+        
+        CRITICAL: 
+        - If the 'likely_destination' contains multiple options (e.g., "A or B", "A / B"), you MUST pick the SINGLE most appropriate one.
+        - Printers/Monitors/Hardware MUST be "Technical Support" and "GUTS (Tech Support)".
+        - Facilities is only for building/office space issues.
+        
+        If the category is incorrect, provide the correct one from the guidelines.
+        Return a JSON object with:
+        'approved': boolean
+        'correction': string (explanation of the correction)
+        'newCategory': string (the corrected category name if not approved)
+        'newDestination': string (the corrected destination - MUST be a single string, no "or")
+        'newJustification': string (a clean, final justification if not approved)`,
         config: { responseMimeType: 'application/json' }
       });
 
@@ -383,6 +436,19 @@ Return a JSON object with:
         }
       }
 
+      // Agent 5: Triage (Dynamic Routing) - Fetch early to check for parent systems
+      const triageRes = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          text: fullText, 
+          analysis: data,
+          team: data.team || data.likely_destination 
+        })
+      });
+      const triageData = await triageRes.json();
+      data.triage = triageData.triage;
+
       setAnalysis(data);
       if (additionalText) {
         setFollowUpResponse('');
@@ -401,10 +467,12 @@ Return a JSON object with:
     setError(null);
     
     try {
-      // Check if it's a GUTS or Buganizer destination
-      const isGuts = analysis.likely_destination.toLowerCase().includes('guts');
-      const isBuganizer = analysis.likely_destination.toLowerCase().includes('buganizer');
       const finalFeedback = analysis.fullText || feedback;
+
+      // Check if it's a GUTS or Buganizer destination
+      const parentSystem = analysis.triage?.parentSystem;
+      const isGuts = analysis.likely_destination.toLowerCase().includes('guts') || parentSystem === 'GUTS';
+      const isBuganizer = analysis.likely_destination.toLowerCase().includes('buganizer') || parentSystem === 'Buganizer';
       
       if (isGuts) {
         setIsSubmitting(false);
@@ -424,36 +492,22 @@ Return a JSON object with:
         return;
       }
 
-      let triageData = null;
-      // Agent 5: Triage (Dynamic Routing)
-      if (analysis.category === 'Manager/Team/Work Feedback' || analysis.team) {
-        const triageRes = await fetch('/api/triage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            text: finalFeedback, 
-            analysis: analysis,
-            team: analysis.team 
-          })
-        });
-        triageData = await triageRes.json();
-        
-        if (triageData.triage && !triageData.triage.success) {
-          setAnalysis({ ...analysis, triage: triageData.triage });
-        }
-      }
-
       // Add to session history
       const newEntry: FeedbackStatus = {
         id: Math.random().toString(36).substr(2, 9),
         summary: analysis.summary,
-        status: 'Submitted - In Review',
+        status: analysis.triage?.success === false ? 'Submission Error' : 'Submitted - In Review',
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       };
       setHistory(prev => [newEntry, ...prev]);
-      setAnalysis(prev => prev ? { ...prev, triage: triageData?.triage } : null);
-      setSubmitted(true);
-    } catch (err) {
+      
+      // Only set submitted to true if triage didn't fail with a hard error
+      if (analysis.triage?.success !== false) {
+        setSubmitted(true);
+      } else {
+        setError(`Submission failed: ${analysis.triage.error || 'Unknown error'}. ${analysis.triage.details || ''}`);
+      }
+    } catch (err: any) {
       console.error("Submission error:", err);
       setError("Failed to submit feedback.");
     } finally {
@@ -611,36 +665,17 @@ Return a JSON object with:
           <div className="relative">
             <div className={`w-full min-h-[120px] p-8 rounded-[2rem] bg-[#E8F0FE] border-none transition-all flex flex-col justify-center ${isFocused ? 'ring-2 ring-blue-500' : ''}`}>
               <div className="relative w-full">
-                {/* The actual editable area */}
                 <textarea
+                  ref={textareaRef}
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  onFocus={() => {
-                    setIsFocused(true);
-                  }}
+                  onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
                   onKeyDown={handleKeyDown}
-                  className="w-full bg-transparent border-none outline-none resize-none text-xl leading-relaxed text-transparent relative z-10 caret-slate-900 p-0 m-0 font-normal"
-                  rows={2}
+                  placeholder={feedback === '' ? placeholder : ''}
+                  className="w-full bg-transparent border-none outline-none resize-none text-xl leading-relaxed text-slate-900 p-0 m-0 font-normal overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent"
+                  style={{ maxHeight: '325px' }}
                 />
-                
-                {/* Overlay for bolding and placeholder */}
-                <div className="absolute inset-0 pointer-events-none text-xl leading-relaxed whitespace-pre-wrap break-words p-0 m-0 font-normal">
-                  <div className="p-0">
-                    {feedback.startsWith('Listen, Google,') ? (
-                      <>
-                        <span className="text-slate-900">Listen, Google,</span>
-                        <span className="text-slate-900">{feedback.slice(15)}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-900">{feedback}</span>
-                    )}
-                    
-                    {feedback === 'Listen, Google, ' && !isFocused && (
-                      <span className="text-slate-400">{placeholder}</span>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -695,7 +730,7 @@ Return a JSON object with:
               <h2 className="text-2xl font-bold text-slate-800">Feedback Analysis</h2>
 
               <div className={`p-10 rounded-[2rem] border ${analysis.critical ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/30'}`}>
-                {submitted && (
+                {submitted && (!analysis.triage || analysis.triage.success) && analysis.category !== 'Compliance' && analysis.category !== 'Emergency' && (
                   <div className="flex items-center gap-3 text-slate-800 mb-8">
                     <CheckCircle2 className="w-6 h-6 text-[#34A853]" />
                     <span className="text-lg font-medium">Feedback submitted successfully.</span>
@@ -712,13 +747,13 @@ Return a JSON object with:
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-3">
                     <p className="text-sm font-bold text-slate-400 tracking-wider">Category</p>
-                    <div className="inline-flex px-6 py-2 bg-[#1a73e8] text-white rounded-full text-sm font-medium">
+                    <div className={`inline-flex px-6 py-2 text-white rounded-full text-sm font-medium ${(analysis.category === 'Compliance' || analysis.category === 'Emergency') ? 'bg-red-600' : 'bg-[#1a73e8]'}`}>
                       {analysis.category}
                     </div>
                   </div>
                   <div className="space-y-3">
                     <p className="text-sm font-bold text-slate-400 tracking-wider">Likely destination</p>
-                    <div className="inline-flex items-center gap-2 px-6 py-2 bg-[#E8F0FE] text-[#1a73e8] rounded-lg text-sm font-medium">
+                    <div className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium ${(analysis.category === 'Compliance' || analysis.category === 'Emergency') ? 'bg-red-50 text-red-600' : 'bg-[#E8F0FE] text-[#1a73e8]'}`}>
                       {analysis.likely_destination}
                       <ExternalLink className="w-4 h-4" />
                     </div>
@@ -758,7 +793,7 @@ Return a JSON object with:
                   <div className="space-y-3 p-6 bg-slate-50/50 rounded-2xl border border-slate-100/50">
                     <p className="text-sm font-bold text-slate-400 tracking-wider">Summary</p>
                     <div className="flex items-start gap-4">
-                      <div className="w-1 self-stretch bg-[#1a73e8] rounded-full" />
+                      <div className={`w-1 self-stretch rounded-full ${(analysis.category === 'Compliance' || analysis.category === 'Emergency') ? 'bg-red-600' : 'bg-[#1a73e8]'}`} />
                       <p className="text-xl text-slate-800 font-medium">{analysis.summary}</p>
                     </div>
                   </div>
@@ -837,8 +872,37 @@ Return a JSON object with:
                   </div>
                 )}
 
+                {/* Off-Platform Action for Compliance/Emergency */}
+                {(analysis.category === 'Compliance' || analysis.category === 'Emergency') && !submitted && (
+                  <div className="mt-8 p-6 bg-red-50 rounded-2xl border border-red-100 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="text-red-900 font-bold">
+                          Action Required Off-Platform
+                        </h4>
+                        <p className="text-red-800 text-sm leading-relaxed">
+                          For your safety and to ensure proper handling, {analysis.category} issues must be reported directly through official channels. 
+                          This feedback will not be stored on this platform.
+                        </p>
+                        <a 
+                          href={analysis.likely_destination.startsWith('go/') ? `https://${analysis.likely_destination}` : analysis.likely_destination}
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all shadow-lg active:scale-95"
+                          onClick={() => setSubmitted(true)}
+                        >
+                          Go to {analysis.likely_destination} <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Submit Anyway Section */}
-                {!submitted && gutsState === 'idle' && buganizerState === 'idle' && !analysis.existingFeature?.exists ? (
+                {!submitted && gutsState === 'idle' && buganizerState === 'idle' && !analysis.existingFeature?.exists && analysis.category !== 'Compliance' && analysis.category !== 'Emergency' ? (
                   <div className="mt-8 pt-8 border-t border-slate-50">
                     <button
                       onClick={handleSubmitAnyway}
@@ -851,8 +915,8 @@ Return a JSON object with:
                         <>
                           <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                           {analysis.duplicate 
-                            ? `Generate ${analysis.likely_destination} ticket anyway` 
-                            : `Generate ${analysis.likely_destination} ticket`}
+                            ? `Generate ${analysis.triage?.parentSystem || analysis.likely_destination} ticket anyway` 
+                            : `Generate ${analysis.triage?.parentSystem || analysis.likely_destination} ticket`}
                         </>
                       )}
                     </button>
@@ -1211,10 +1275,12 @@ Return a JSON object with:
                   </div>
                 ) : (
                   <div className="mt-8 space-y-3">
-                    <div className="flex items-center gap-3 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="text-sm font-medium">Feedback submitted successfully.</span>
-                    </div>
+                    {analysis.category !== 'Compliance' && analysis.category !== 'Emergency' && (
+                      <div className="flex items-center gap-3 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="text-sm font-medium">Feedback submitted successfully.</span>
+                      </div>
+                    )}
 
                     <button
                       onClick={handleReset}
@@ -1223,59 +1289,6 @@ Return a JSON object with:
                       <PlusCircle className="w-4 h-4" />
                       Send a new feedback
                     </button>
-                    
-                    {analysis.triage && (
-                      <div className={`p-4 rounded-xl text-xs flex items-start gap-3 ${analysis.triage.success ? (analysis.triage.mocked ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-blue-50 text-blue-700 border border-blue-100') : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                        <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-bold tracking-wider mb-1">Triage status</p>
-                          {analysis.triage.success ? (
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 text-emerald-700">
-                                <CheckCircle2 className="w-4 h-4" />
-                                <p className="font-semibold">
-                                  {analysis.triage.mocked ? 'Triage Identified' : 'Action Required'}
-                                </p>
-                              </div>
-                              
-                              {analysis.triage.team && (
-                                <p className="opacity-80">
-                                  This feedback should be routed to the <span className="font-bold">{analysis.triage.team}</span>.
-                                </p>
-                              )}
-                              
-                              {analysis.triage.formUrl && (
-                                <div className="pt-2">
-                                  <a 
-                                    href={analysis.triage.formUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-bold tracking-wider shadow-lg hover:shadow-xl active:scale-95"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                    Open {analysis.triage.team} Form
-                                  </a>
-                                  <p className="mt-3 text-xs opacity-70 leading-relaxed">
-                                    Click the button above to complete the official survey for this team. 
-                                    Your summary and justification can be used to help you fill it out.
-                                  </p>
-                                </div>
-                              )}
-                              {analysis.triage.mocked && (
-                                <p className="text-xs opacity-70 italic">
-                                  {analysis.triage.details}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <p className="font-semibold">{analysis.triage.error}</p>
-                              <p className="opacity-80">{analysis.triage.details || 'Make sure the destination system is correctly configured.'}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
